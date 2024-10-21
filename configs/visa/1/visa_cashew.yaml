@@ -1,0 +1,65 @@
+model:
+  base_learning_rate: 4.5e-06
+  target: ldm.models.autoencoders.ml_ae_match.VQModel
+  params:
+    # backbone: "resnet50"
+    backbone: "wide_resnet50_2"
+    image_size: 256
+    feature_dims: [256, 512, 1024, 2048]
+    pos_dims: [0, 0, 0, 0]
+    # n_embeds: [64, 64, 64, 64]
+    # folds: [16, 8, 4, 2]
+    # n_embeds: [1024, 1024, 1024, 256]
+    # folds: [4, 2, 1, 1]
+    # n_embeds: [256, 256, 256, 256]
+    # folds: [8, 4, 2, 1]
+    n_embeds: [16384, 4096, 1024, 256]
+    folds: [1, 1, 1, 1]
+    monitor: val/metric
+
+    ddconfig:
+      double_z: false
+      z_channels: 2048
+      resolution: 256
+      in_channels: 3
+      out_ch: 3
+      ch: 64
+      ch_mult:
+      - 1
+      - 4
+      - 8
+      - 16
+      - 32
+      down_samples: [1,4,2,2,2]
+      num_res_blocks: [1,4,4,4,1]
+      attn_resolutions: []
+      dropout: 0.0
+    lossconfig:
+      target: ldm.models.autoencoders.losses.VQLPIPSWithDiscriminator
+      params:
+        disc_conditional: false
+        disc_in_channels: 3
+        disc_start: 0
+        disc_weight: 0.75
+        codebook_weight: 1.0
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 4
+    num_workers: 16
+    train:
+      target: ldm.data.visa.VisA
+      params:
+        data_path: '/data/arima/VisA'
+        object_label: 'cashew'
+    validation:
+      target: ldm.data.visa.VisA_validate
+      params:
+        data_path: '/data/arima/VisA'
+        object_label: 'cashew'
+    test:
+      target: ldm.data.visa.VisA_validate
+      params:
+        data_path: '/data/arima/VisA'
+        object_label: 'cashew'
