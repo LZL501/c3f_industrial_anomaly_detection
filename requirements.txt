@@ -1,0 +1,13 @@
+torch
+torchvision
+numpy
+opencv-python
+Pillow
+pandas
+PyYAML
+scipy
+tqdm
+einops
+tensorboard
+pytest
+ruff

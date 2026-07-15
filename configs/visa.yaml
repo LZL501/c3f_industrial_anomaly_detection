@@ -1,0 +1,66 @@
+experiment:
+  name: visa_c3f
+  seed: 1999
+  output_dir: runs
+
+data:
+  dataset: visa
+  root: data/VisA
+  texture_root: data/dtd/images
+  category: candle
+  image_size: 256
+  batch_size: 4
+  num_workers: 8
+  anomaly_probability: 0.5
+  require_foreground: true
+  require_texture: true
+
+model:
+  backbone: wide_resnet50_2
+  pretrained_backbone: true
+  backbone_weights: IMAGENET1K_V1
+  freeze_backbone_stats: true
+  guided_segmentation: true
+  image_size: 256
+  feature_dims: [256, 512, 1024, 2048]
+  pos_dims: [0, 0, 0, 0]
+  n_embeds: [256, 256, 256, 256]
+  folds: [8, 4, 2, 1]
+  decoder:
+    ch: 64
+    out_ch: 3
+    ch_mult: [1, 4, 8, 16, 32]
+    down_samples: [1, 4, 2, 2, 2]
+    num_res_blocks: [1, 4, 4, 4, 1]
+    attn_resolutions: []
+    dropout: 0.0
+    in_channels: 3
+    resolution: 256
+    z_channels: 2048
+
+loss:
+  reconstruction_weight: 1.0
+  perceptual_weight: 1.0
+  feature_weight: 10.0
+  codebook_weight: 1.0
+  segmentation_weight: 1.0
+  adversarial_weight: 0.75
+  discriminator_factor: 1.0
+  discriminator_start: 0
+
+train:
+  epochs: 150
+  lr: 5.0e-4
+  support_samples: 500
+  freeze_codebook: true
+  synthetic_anomaly: true
+  log_every: 20
+  image_log_every: 200
+  tensorboard: true
+  amp: false
+
+eval:
+  score_mode: segmentation
+  smooth_sigma: 0.0
+  localization_metric: aupro
+  aupro_mode: per_image
