@@ -1,8 +1,6 @@
 <div align="center">
 
-# C3F
-
-### Anomaly or Characteristic: Memory-based Coarse-to-Fine Feature Fusion for Industrial Anomaly Detection
+# Anomaly or Characteristic: Memory-based Coarse-to-Fine Feature Fusion for Industrial Anomaly Detection
 
 **Huachao Zhu\*, Zelong Liu\*, Zhichao Sun, Wenhui Dong, Xin Xiao, Zerui Zhang, Yongchao Xu†**
 
