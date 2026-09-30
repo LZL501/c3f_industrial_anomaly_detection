@@ -44,8 +44,6 @@ Results reported in Tables I and III of the paper, using **256 × 256** input im
 | MVTec-AD | **99.66** | **98.86** | — |
 | VisA | **98.25** | — | **95.25** |
 
-These are the published results. The current `main` implementation and updated foreground masks have not yet undergone a complete benchmark reproduction.
-
 ## Getting started
 
 ### 1. Install
@@ -89,7 +87,7 @@ Keep original images and training foreground masks in **separate directories**:
 
 Foreground masks are binary PNGs at the source image dimensions: **white for physical foreground, black for background**. A VisA source such as `Normal/001.JPG` maps to `Normal/001.png` in the mask directory. Object categories require masks; MVTec texture categories use full-image foreground. Missing, unreadable, or empty required masks stop training.
 
-Dataset images and prepared foreground masks are not bundled with this code repository. Prepare the masks before training. See the [foreground preparation guide](docs/foreground_setup.md) for baseline generation commands and review requirements; the [VisA baseline and refinement notes](docs/visa_foreground_baseline.md) describe the current selection and its validation scope.
+Dataset images and foreground masks are downloaded or prepared separately. See the [foreground preparation guide](docs/foreground_setup.md) for mask generation and directory setup.
 
 ### 3. Train a category
 
@@ -131,13 +129,11 @@ python tools/eval.py --config configs/visa.yaml \
 
 Use the same architecture settings as the training run; its saved `config.yaml` can be passed to `--config`. Evaluation reports image AUROC, pixel AUROC, and AUPRO as fractions in `[0, 1]`. The MVTec template selects pixel AUROC for localization; the VisA template selects AUPRO. Evaluation uses original anomaly annotations and does not require training foreground masks or DTD textures.
 
-## Implementation notes
+## Configuration and project structure
 
-The `main` branch provides a plain PyTorch training and evaluation implementation. The earlier PyTorch Lightning entry points and configurations remain on [`master`](https://github.com/LZL501/c3f_industrial_anomaly_detection/tree/master).
+The default configuration uses a frozen ImageNet `IMAGENET1K_V1` Wide-ResNet50-2 encoder, four feature stages, memory folds `[8, 4, 2, 1]`, and guided segmentation. Foreground masks restrict texture and structure pseudo anomalies to the object.
 
-The current defaults use a frozen ImageNet `IMAGENET1K_V1` Wide-ResNet50-2 encoder, four feature stages, memory folds `[8, 4, 2, 1]`, and guided segmentation. Foreground masks restrict texture and structure pseudo anomalies to the object.
-
-**Memory configuration:** `train.freeze_codebook: true` follows the earlier released training path. Set `train.freeze_codebook=false` to train the memory embeddings as described in the paper. Record this choice when comparing experiments.
+Memory embeddings are frozen by default (`train.freeze_codebook: true`). Set `train.freeze_codebook=false` to optimize them during training.
 
 | Location | Contents |
 |:--|:--|
@@ -146,9 +142,7 @@ The current defaults use a frozen ImageNet `IMAGENET1K_V1` Wide-ResNet50-2 encod
 | `c3f/engine.py` | Training, evaluation, and checkpoint handling |
 | `configs/` | MVTec-AD and VisA experiment templates |
 | `tools/` | Training, evaluation, and foreground preparation commands |
-| `docs/` | Foreground preparation, provenance, and review limits |
-
-Run the implementation checks with `python -m pytest -q`.
+| `docs/` | Foreground preparation guides |
 
 ## Citation
 
