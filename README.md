@@ -1,127 +1,165 @@
-# C3F Clean
+<div align="center">
 
-A focused PyTorch implementation of C3FGS, extracted from the
-`model_for_visa2.py` path in the original repository. It keeps the C3F
-reconstruction, pseudo-anomaly training, guided segmentation, evaluation, and
-visual logging paths while removing the unused latent-diffusion stack and the
-PyTorch Lightning dependency.
+# C3F
 
-## Implementation
+### Anomaly or Characteristic: Memory-based Coarse-to-Fine Feature Fusion for Industrial Anomaly Detection
 
-- Frozen ImageNet `IMAGENET1K_V1` Wide-ResNet50-2 features at four stages.
-- Coreset memory initialized from normal support images with folds
-  `[8, 4, 2, 1]`.
-- Coarse-to-fine fusion with `max(cos(f, q), 0)` and a three-stage averaged
-  rough anomaly map.
-- Six-channel `[input, reconstruction] * rough_map` guided segmentation.
-- L1, LPIPS, feature, memory, adaptive adversarial, and focal losses matching
-  the released training path.
-- DTD and structural pseudo anomalies restricted to validated foreground masks.
-- PyTorch checkpoints, JSONL metrics, and TensorBoard scalar/image logging.
+**Huachao Zhu\*, Zelong Liu\*, Zhichao Sun, Wenhui Dong, Xin Xiao, Zerui Zhang, Yongchao Xu†**
 
-The default `train.freeze_codebook: true` matches the released code. Set it to
-`false` to train memory embeddings as described in the paper.
+Wuhan University · **IEEE Transactions on Multimedia, 2026**
 
-## Install
+[**Paper**](https://doi.org/10.1109/TMM.2026.3668690) · [**Method**](#method) · [**Getting started**](#getting-started) · [**Citation**](#citation)
 
-Use Python 3.10 or newer and install a CUDA-compatible PyTorch build first when
-training on GPU.
+<sub>* Equal contribution. † Corresponding author.</sub>
+
+</div>
+
+**Reconstruct defects while preserving the characteristics that make each normal object unique.**
+C3FGS combines memory-based coarse-to-fine feature fusion (**C3F**) with anomaly-map-guided segmentation (**GS**) for unsupervised industrial anomaly detection and localization. Training uses normal images and synthesized anomalies; inference produces a reconstruction and an anomaly map.
+
+<p align="center">
+  <img src="assets/paper/framework.png" width="1000" alt="C3FGS framework: memory-guided reconstruction generates a rough anomaly map, which guides the segmentation network.">
+</p>
+
+*Framework overview from Figure 2 of the [paper](https://doi.org/10.1109/TMM.2026.3668690).*
+
+## Method
+
+Normal objects can contain distinctive details that resemble defects. C3F replaces ordinary encoder–decoder skip connections with memory-guided fusion at progressively finer spatial scales. It suppresses anomalous features while retaining normal variation. GS then combines the input image, its reconstruction, and a rough feature-discrepancy map to localize defects.
+
+- **Memory at multiple scales:** coreset embeddings represent normal features at different levels of granularity.
+- **Coarse-to-fine fusion:** larger windows address larger anomalies; finer windows preserve local characteristics.
+- **Guided segmentation:** the rough anomaly map directs the segmentation network toward suspicious regions.
+
+<p align="center">
+  <img src="assets/paper/coarse-to-fine.png" width="1000" alt="C3F module: unfold, match and fuse with memory, then fold at progressively finer window sizes while retaining normal characteristics.">
+</p>
+
+*Memory-based C3F module from Figure 3 of the paper. [Figure sources](assets/paper/README.md).*
+
+## Paper results
+
+Results reported in Tables I and III of the paper, using **256 × 256** input images. All values are percentages.
+
+| Dataset | Image AUROC ↑ | Pixel AUROC ↑ | Pixel AUPRO ↑ |
+|:--|--:|--:|--:|
+| MVTec-AD | **99.66** | **98.86** | — |
+| VisA | **98.25** | — | **95.25** |
+
+These are the published results. The current `main` implementation and updated foreground masks have not yet undergone a complete benchmark reproduction.
+
+## Getting started
+
+### 1. Install
+
+Use Python **3.10+**. For GPU training, install a PyTorch/torchvision build compatible with your CUDA environment.
 
 ```bash
+git clone --branch main https://github.com/LZL501/c3f_industrial_anomaly_detection.git
+cd c3f_industrial_anomaly_detection
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Download DTD to the default `data/dtd/images` path:
+The backbone and perceptual network use pretrained torchvision weights, which are downloaded on first use unless already cached. The small LPIPS calibration weights are included in `assets/lpips/vgg.pth`.
+
+### 2. Prepare data and foreground masks
+
+Download [MVTec-AD](https://www.mvtec.com/company/research/datasets/mvtec-ad) and [VisA](https://github.com/amazon-science/spot-diff). For VisA, retain the official `split_csv/1cls.csv` one-class split. Download the DTD textures used for synthetic anomaly generation:
 
 ```bash
 bash scripts/download_dtd.sh
 ```
 
-## Foreground Masks
+Keep original images and training foreground masks in **separate directories**:
 
-Object categories require one foreground mask per normal training image. Masks
-use the dataset layout `<category>/train/foreground/<image>.png`; texture
-categories use the full image. Training fails on missing, unreadable, or empty
-masks so pseudo anomalies cannot silently spill into the background.
-
-The current MVTec masks are stored separately under
-`mvtec-foreground/<category>/train/foreground/<image>.png`. Set
-`data.foreground_root` (or `tools/train.py --foreground-root`) to this folder;
-`data.root` points to the original image dataset. The MVTec template uses this
-separate mask directory. If `foreground_root` is omitted, older configurations
-continue reading masks beside the training images. Required external masks
-must exist; a missing external mask does not fall back to a dataset mask.
-
-VisA uses the separate `visa-foreground/<category>/Data/Foreground/Normal/`
-folder with PNG masks matching each source image stem. Its Otsu and HQ-SAM
-candidates and selection limits are described in
-[VisA foreground baseline](docs/visa_foreground_baseline.md).
-
-Generate MVTec masks with HQ-SAM and bounding-box prompts:
-
-```bash
-PYTHONPATH=third_party/sam_hq python tools/generate_mvtec_foreground_sam.py \
-  --root data/MVTec-AD --backend sam_hq --strategy v2 \
-  --checkpoint checkpoints/sam_hq_vit_b.pth --categories all \
-  --preview-dir runs/foreground-preview
+```text
+.
+├── data/
+│   ├── MVTec-AD/
+│   │   └── <category>/{train/good,test,ground_truth}/
+│   ├── VisA/
+│   │   ├── split_csv/1cls.csv
+│   │   └── <category>/Data/{Images,Masks}/
+│   └── dtd/images/
+├── mvtec-foreground/
+│   └── <category>/train/foreground/<image-stem>.png
+└── visa-foreground/
+    └── <category>/Data/Foreground/Normal/<image-stem>.png
 ```
 
-For transistor, refine those initial masks using the reviewed training-image
-annotations. The original geometric masks can omit package edges and include
-background beside the leads. Write corrections to a separate mask root:
+Foreground masks are binary PNGs at the source image dimensions: **white for physical foreground, black for background**. A VisA source such as `Normal/001.JPG` maps to `Normal/001.png` in the mask directory. Object categories require masks; MVTec texture categories use full-image foreground. Missing, unreadable, or empty required masks stop training.
 
-```bash
-python tools/refine_foreground_from_annotations.py \
-  --data-root data/MVTec-AD --output-root artifacts/transistor-refined
-```
+Dataset images and prepared foreground masks are not bundled with this code repository. Prepare the masks before training. See the [foreground preparation guide](docs/foreground_setup.md) for baseline generation commands and review requirements; the [VisA baseline and refinement notes](docs/visa_foreground_baseline.md) describe the current selection and its validation scope.
 
-This writes masks and a provenance manifest, not a complete dataset copy.
-Review the overlays before using the masks for training. See
-[foreground refinement](docs/foreground_refinement.md) for the annotation scope,
-reproduction checks, and remaining limits.
+### 3. Train a category
 
-Audit and refine the non-cable MVTec categories with:
-
-```bash
-python tools/refine_mvtec_foregrounds.py \
-  --data-root data/MVTec-AD --output-root artifacts/mvtec-refined \
-  --categories bottle capsule carpet grid hazelnut leather metal_nut \
-    pill screw tile toothbrush wood zipper
-```
-
-The cable ellipse and manual-polygon exports were both withdrawn: one omitted
-sheath, the other included cast shadow. The current replacement uses imagegen
-with per-image overlay review: 179 generated masks are included, while the
-remaining 45 cable masks retain their original shared versions. See
-[cable imagegen foreground](docs/cable_imagegen_foreground.md).
-The command above excludes cable; the tool rejects the withdrawn cable
-annotations. It still repairs metal-nut apertures and
-zipper fabric edges, preserves other object masks, and uses full-image texture
-foreground. Transistor uses the separate annotation tool above. See the
-[historical audit](docs/mvtec_foreground_audit.md) for that pass's review scope.
-
-## Train And Evaluate
+**MVTec-AD** — for example, `bottle`:
 
 ```bash
 python tools/train.py --config configs/mvtec.yaml \
-  --data-root data/MVTec-AD --texture-root data/dtd/images \
-  --category bottle --device cuda:0
-
-python tools/eval.py --config configs/mvtec.yaml \
-  --checkpoint runs/mvtec_c3f_bottle/best.pth \
-  --data-root data/MVTec-AD --category bottle --device cuda:0
+  --data-root data/MVTec-AD --foreground-root mvtec-foreground \
+  --texture-root data/dtd/images --category bottle --device cuda:0
 ```
 
-Resume all model and optimizer state with `--resume runs/.../last.pth`. Override
-configuration values using dotted arguments such as `train.epochs=100`.
+**VisA** — for example, `candle`:
 
-Training writes `metrics.jsonl`, `last.pth`, `best.pth`, and TensorBoard events
-under `runs/<experiment>_<category>/`. Inspect logs with:
+```bash
+python tools/train.py --config configs/visa.yaml \
+  --data-root data/VisA --foreground-root visa-foreground \
+  --texture-root data/dtd/images --category candle --device cuda:0
+```
+
+Replace `--category` to train another category. Paths can also be set in the YAML configuration. Dotted overrides control individual settings, for example `train.epochs=100`.
+
+Training saves `config.yaml`, `metrics.jsonl`, `last.pth`, `best.pth`, and TensorBoard logs under `runs/<experiment>_<category>/`. Resume with `--resume runs/<experiment>_<category>/last.pth`, and inspect logs with:
 
 ```bash
 tensorboard --logdir runs
 ```
 
-Run focused checks with `pytest -q`.
+### 4. Evaluate
+
+```bash
+python tools/eval.py --config configs/mvtec.yaml \
+  --checkpoint runs/mvtec_c3f_bottle/best.pth \
+  --data-root data/MVTec-AD --category bottle --device cuda:0
+
+python tools/eval.py --config configs/visa.yaml \
+  --checkpoint runs/visa_c3f_candle/best.pth \
+  --data-root data/VisA --category candle --device cuda:0
+```
+
+Use the same architecture settings as the training run; its saved `config.yaml` can be passed to `--config`. Evaluation reports image AUROC, pixel AUROC, and AUPRO as fractions in `[0, 1]`. The MVTec template selects pixel AUROC for localization; the VisA template selects AUPRO. Evaluation uses original anomaly annotations and does not require training foreground masks or DTD textures.
+
+## Implementation notes
+
+The `main` branch provides a plain PyTorch training and evaluation implementation. The earlier PyTorch Lightning entry points and configurations remain on [`master`](https://github.com/LZL501/c3f_industrial_anomaly_detection/tree/master).
+
+The current defaults use a frozen ImageNet `IMAGENET1K_V1` Wide-ResNet50-2 encoder, four feature stages, memory folds `[8, 4, 2, 1]`, and guided segmentation. Foreground masks restrict texture and structure pseudo anomalies to the object.
+
+**Memory configuration:** `train.freeze_codebook: true` follows the earlier released training path. Set `train.freeze_codebook=false` to train the memory embeddings as described in the paper. Record this choice when comparing experiments.
+
+| Location | Contents |
+|:--|:--|
+| `c3f/models/` | Encoder, memory fusion, decoder, segmentation, and losses |
+| `c3f/data/` | Dataset loaders and synthetic anomalies |
+| `c3f/engine.py` | Training, evaluation, and checkpoint handling |
+| `configs/` | MVTec-AD and VisA experiment templates |
+| `tools/` | Training, evaluation, and foreground preparation commands |
+| `docs/` | Foreground preparation, provenance, and review limits |
+
+Run the implementation checks with `python -m pytest -q`.
+
+## Citation
+
+```bibtex
+@article{zhu2026c3f,
+  title   = {Anomaly or Characteristic: Memory-based Coarse-to-Fine Feature Fusion for Industrial Anomaly Detection},
+  author  = {Zhu, Huachao and Liu, Zelong and Sun, Zhichao and Dong, Wenhui and Xiao, Xin and Zhang, Zerui and Xu, Yongchao},
+  journal = {IEEE Transactions on Multimedia},
+  year    = {2026},
+  doi     = {10.1109/TMM.2026.3668690}
+}
+```
