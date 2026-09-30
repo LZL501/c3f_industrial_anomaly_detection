@@ -6,6 +6,7 @@ experiment:
 data:
   dataset: visa
   root: data/VisA
+  foreground_root: visa-foreground
   texture_root: data/dtd/images
   category: candle
   image_size: 256

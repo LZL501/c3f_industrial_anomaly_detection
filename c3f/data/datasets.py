@@ -26,6 +26,7 @@ class MVTecDataset(Dataset):
         anomaly_probability: float = 0.5,
         require_foreground: bool = True,
         require_texture: bool = True,
+        foreground_root: str | None = None,
     ) -> None:
         self.root = Path(root) / category
         self.category = category
@@ -33,6 +34,7 @@ class MVTecDataset(Dataset):
         self.resize = (image_size, image_size)
         self.anomaly_probability = anomaly_probability
         self.require_foreground = require_foreground
+        self.foreground_root = foreground_root
         pattern = "train/good/*.png" if train else "test/**/*.png"
         self.image_paths = sorted(self.root.glob(pattern))
         self.transform = _image_transform()
@@ -57,6 +59,7 @@ class MVTecDataset(Dataset):
                 self.resize,
                 self.category,
                 require=self.require_foreground,
+                foreground_root=self.foreground_root,
             )
             if np.random.rand() < self.anomaly_probability and self.anomaly is not None:
                 anomaly, mask = self.anomaly.generate(image, foreground)
@@ -87,6 +90,7 @@ class VisADataset(Dataset):
         anomaly_probability: float = 0.5,
         require_foreground: bool = True,
         require_texture: bool = True,
+        foreground_root: str | None = None,
     ) -> None:
         self.root = Path(root)
         self.category = category
@@ -94,6 +98,7 @@ class VisADataset(Dataset):
         self.resize = (image_size, image_size)
         self.anomaly_probability = anomaly_probability
         self.require_foreground = require_foreground
+        self.foreground_root = foreground_root
         split_csv = self.root / "split_csv" / "1cls.csv"
         df = pd.read_csv(split_csv)
         split_name = "train" if train else "test"
@@ -119,7 +124,12 @@ class VisADataset(Dataset):
         target = 0 if self.labels[idx] == "normal" else 1
         if self.train:
             foreground = _visa_foreground(
-                path, image, self.resize, self.category, require=self.require_foreground
+                path,
+                image,
+                self.resize,
+                self.category,
+                require=self.require_foreground,
+                foreground_root=self.foreground_root,
             )
             if np.random.rand() < self.anomaly_probability and self.anomaly is not None:
                 anomaly, mask = self.anomaly.generate(image, foreground)
@@ -174,6 +184,7 @@ def _build_dataset(config: dict, train: bool) -> Dataset:
         anomaly_probability=data_cfg.get("anomaly_probability", 0.5),
         require_foreground=data_cfg.get("require_foreground", True),
         require_texture=data_cfg.get("require_texture", True),
+        foreground_root=data_cfg.get("foreground_root"),
     )
 
 
@@ -218,10 +229,15 @@ def _mvtec_foreground(
     resize: tuple[int, int],
     category: str,
     require: bool,
+    foreground_root: str | Path | None = None,
 ) -> np.ndarray:
     if category in {"carpet", "grid", "leather", "tile", "wood"}:
         return np.ones(resize, dtype=np.int64)
-    foreground_path = Path(str(path).replace("good", "foreground"))
+    foreground_path = (
+        Path(foreground_root) / category / "train" / "foreground" / path.name
+        if foreground_root is not None
+        else path.parent.parent / "foreground" / path.name
+    )
     if not foreground_path.exists():
         if require:
             raise FileNotFoundError(
@@ -257,8 +273,18 @@ def _visa_foreground(
     resize: tuple[int, int],
     category: str,
     require: bool,
+    foreground_root: str | Path | None = None,
 ) -> np.ndarray:
-    foreground_path = Path(str(path).replace("Images", "Foreground"))
+    foreground_path = (
+        Path(foreground_root)
+        / category
+        / "Data"
+        / "Foreground"
+        / path.parent.name
+        / path.with_suffix(".png").name
+        if foreground_root is not None
+        else path.parent.parent.parent / "Foreground" / path.parent.name / path.name
+    )
     if not foreground_path.exists():
         if require:
             raise FileNotFoundError(

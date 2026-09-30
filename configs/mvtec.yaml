@@ -6,6 +6,7 @@ experiment:
 data:
   dataset: mvtec
   root: data/MVTec-AD
+  foreground_root: mvtec-foreground
   texture_root: data/dtd/images
   category: bottle
   image_size: 256

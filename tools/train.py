@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import torch
 import yaml
@@ -19,6 +19,7 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--data-root")
     parser.add_argument("--texture-root")
+    parser.add_argument("--foreground-root")
     parser.add_argument("--category")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument(
@@ -34,6 +35,8 @@ def main() -> None:
         cli_overrides["data.root"] = args.data_root
     if args.texture_root:
         cli_overrides["data.texture_root"] = args.texture_root
+    if args.foreground_root:
+        cli_overrides["data.foreground_root"] = args.foreground_root
     if args.category:
         cli_overrides["data.category"] = args.category
     config = merge_overrides(config, cli_overrides)

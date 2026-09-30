@@ -46,6 +46,19 @@ use the dataset layout `<category>/train/foreground/<image>.png`; texture
 categories use the full image. Training fails on missing, unreadable, or empty
 masks so pseudo anomalies cannot silently spill into the background.
 
+The current MVTec masks are stored separately under
+`mvtec-foreground/<category>/train/foreground/<image>.png`. Set
+`data.foreground_root` (or `tools/train.py --foreground-root`) to this folder;
+`data.root` points to the original image dataset. The MVTec template uses this
+separate mask directory. If `foreground_root` is omitted, older configurations
+continue reading masks beside the training images. Required external masks
+must exist; a missing external mask does not fall back to a dataset mask.
+
+VisA uses the separate `visa-foreground/<category>/Data/Foreground/Normal/`
+folder with PNG masks matching each source image stem. Its Otsu and HQ-SAM
+candidates and selection limits are described in
+[VisA foreground baseline](docs/visa_foreground_baseline.md).
+
 Generate MVTec masks with HQ-SAM and bounding-box prompts:
 
 ```bash
@@ -54,6 +67,40 @@ PYTHONPATH=third_party/sam_hq python tools/generate_mvtec_foreground_sam.py \
   --checkpoint checkpoints/sam_hq_vit_b.pth --categories all \
   --preview-dir runs/foreground-preview
 ```
+
+For transistor, refine those initial masks using the reviewed training-image
+annotations. The original geometric masks can omit package edges and include
+background beside the leads. Write corrections to a separate mask root:
+
+```bash
+python tools/refine_foreground_from_annotations.py \
+  --data-root data/MVTec-AD --output-root artifacts/transistor-refined
+```
+
+This writes masks and a provenance manifest, not a complete dataset copy.
+Review the overlays before using the masks for training. See
+[foreground refinement](docs/foreground_refinement.md) for the annotation scope,
+reproduction checks, and remaining limits.
+
+Audit and refine the non-cable MVTec categories with:
+
+```bash
+python tools/refine_mvtec_foregrounds.py \
+  --data-root data/MVTec-AD --output-root artifacts/mvtec-refined \
+  --categories bottle capsule carpet grid hazelnut leather metal_nut \
+    pill screw tile toothbrush wood zipper
+```
+
+The cable ellipse and manual-polygon exports were both withdrawn: one omitted
+sheath, the other included cast shadow. The current replacement uses imagegen
+with per-image overlay review: 179 generated masks are included, while the
+remaining 45 cable masks retain their original shared versions. See
+[cable imagegen foreground](docs/cable_imagegen_foreground.md).
+The command above excludes cable; the tool rejects the withdrawn cable
+annotations. It still repairs metal-nut apertures and
+zipper fabric edges, preserves other object masks, and uses full-image texture
+foreground. Transistor uses the separate annotation tool above. See the
+[historical audit](docs/mvtec_foreground_audit.md) for that pass's review scope.
 
 ## Train And Evaluate
 
